@@ -2,7 +2,7 @@
 
 > **Experimental software — security and platform-policy review required.**
 
-TS Reporter is a Manifest V3 browser-extension codebase that interacts with Twitch pages and provides a reporting-related interface. The current implementation contains automated reporting workflow logic, generated email metadata, persistent activity records, and browser identity/fingerprint and request-header modification.
+TS Reporter is a Manifest V3 browser-extension codebase that interacts with Twitch pages and provides a reporting-related interface. The source tree contains automated reporting workflow logic, generated email metadata, persistent activity records, and legacy browser identity/fingerprint code. The current manifest does not grant the network-header or scripting permissions needed to apply the legacy fingerprint modifications, and it no longer loads the page-context injection scripts.
 
 These capabilities create a significant risk of misuse, including coordinated or misleading reports and attempts to circumvent platform anti-abuse systems. This repository should **not** be used to submit bulk, duplicate, retaliatory, or otherwise inaccurate reports.
 
