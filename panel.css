@@ -1,0 +1,191 @@
+#tsr-panel,
+#tsr-panel * {
+  box-sizing: border-box;
+  font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+}
+
+#tsr-panel {
+  position: fixed;
+  top: 80px;
+  left: 80px;
+  width: 340px;
+  min-width: 100px;
+  min-height: 100px;
+  max-width: none;
+  max-height: none;
+  background: #18181b;
+  color: #efeff1;
+  border: 1px solid #2f2f35;
+  border-radius: 8px;
+  z-index: 2147483647;
+  pointer-events: auto !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+}
+
+#tsr-panel.tsr-collapsed .tsr-body { display: none; }
+
+#tsr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #0e0e10;
+  border-bottom: 1px solid #2f2f35;
+  border-radius: 8px 8px 0 0;
+  cursor: move;
+  flex: 0 0 auto;
+}
+#tsr-header .tsr-title { font-weight: 600; letter-spacing: 0.3px; color: #a970ff; }
+#tsr-header .tsr-toggle {
+  background: transparent; border: none; color: #efeff1;
+  cursor: pointer; font-size: 14px; padding: 0 4px;
+}
+
+.tsr-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.tsr-row { display: flex; flex-direction: column; gap: 4px; }
+.tsr-row label {
+  font-size: 11px; color: #adadb8;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.tsr-row select,
+.tsr-row input[type="text"],
+.tsr-row input[type="number"],
+.tsr-row input[type="file"],
+.tsr-row textarea {
+  background: #0e0e10;
+  border: 1px solid #2f2f35;
+  color: #efeff1;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+}
+.tsr-row select:focus,
+.tsr-row input:focus,
+.tsr-row textarea:focus { border-color: #a970ff; }
+.tsr-row select:disabled { opacity: 0.5; cursor: not-allowed; }
+.tsr-row textarea { resize: vertical; min-height: 64px; font-family: inherit; }
+
+.tsr-muted { font-size: 11px; color: #adadb8; }
+
+.tsr-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tsr-grid2 .tsr-row { margin: 0; }
+
+.tsr-buttons { display: flex; gap: 6px; margin-top: 4px; align-items: center; flex-wrap: wrap; }
+
+.tsr-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  transition: opacity 0.15s;
+  pointer-events: auto !important;
+}
+.tsr-btn:hover { opacity: 0.85; }
+.tsr-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.tsr-btn-primary   { background: #9147ff; color: #fff; }
+.tsr-btn-secondary { background: #2f2f35; color: #efeff1; }
+.tsr-btn-danger    { background: #7a2626; color: #fff; }
+.tsr-btn-ghost     { background: transparent; color: #a970ff; border: 1px solid #3a3a44; }
+
+.tsr-status {
+  font-size: 11px;
+  color: #adadb8;
+  min-height: 28px;
+  padding: 6px 8px;
+  background: #0e0e10;
+  border: 1px solid #2f2f35;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+  user-select: text;
+}
+.tsr-status.tsr-ok  { color: #00c176; border-color: #00c176; }
+.tsr-status.tsr-err { color: #ff5c5c; border-color: #ff5c5c; }
+
+.tsr-progress {
+  font-size: 11px;
+  color: #a970ff;
+  padding: 4px 8px;
+  background: #0e0e10;
+  border: 1px solid #2f2f35;
+  border-radius: 4px;
+  user-select: text;
+}
+
+.tsr-hidden { display: none !important; }
+
+.tsr-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 2;
+}
+.tsr-resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #a970ff;
+  border-bottom: 2px solid #a970ff;
+  opacity: 0.7;
+}
+
+.tsr-antifp-details {
+  font-size: 11px;
+  color: #adadb8;
+  border: 1px solid #2f2f35;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+.tsr-antifp-details summary {
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #adadb8;
+  margin-bottom: 4px;
+}
+.tsr-antifp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
+  padding-top: 4px;
+}
+.tsr-antifp-grid label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #efeff1;
+  cursor: pointer;
+}
+.tsr-antifp-grid input[type="checkbox"] {
+  width: auto;
+  accent-color: #a970ff;
+}
