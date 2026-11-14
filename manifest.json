@@ -36,25 +36,10 @@
     },
     {
       "matches": ["https://twitch.tv/*", "https://*.twitch.tv/*"],
-      "js": ["content/injected.js"],
-      "run_at": "document_start",
-      "all_frames": true,
-      "match_about_blank": true,
-      "world": "MAIN"
-    },
-    {
-      "matches": ["https://twitch.tv/*", "https://*.twitch.tv/*"],
       "js": ["content.js"],
       "css": ["panel.css"],
       "run_at": "document_idle",
       "all_frames": false
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["content/injected.js"],
-      "matches": ["https://twitch.tv/*", "https://*.twitch.tv/*"],
-      "use_dynamic_url": true
     }
   ],
   "options_ui": {
