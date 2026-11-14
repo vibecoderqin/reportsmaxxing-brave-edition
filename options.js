@@ -9,7 +9,7 @@
   }
   if (!HAS_EXT) { showWrongContext(); return; }
 
-  const K_SETTINGS = "tsr_settings_v1", K_PROGRESS = "tsr_progress_v1", K_EMAILS = "tsr_emails_v1", K_TARGET = "tsr_target_channel_v1", K_RATE = "tsr_rate_v2";
+  const K_SETTINGS = "tsr_settings_v1", K_PROGRESS = "tsr_progress_v1", K_EMAILS = "tsr_emails_v1", K_TARGET = "tsr_target_channel_v1";
   const DEFAULT_SETTINGS = { content: "Chat Messages", reason: "Hateful Conduct", subreason: "Slurs or Symbols", descriptionText: "", delayMin: 800, delayMax: 1800, timeoutMs: 8000, maxRetries: 3, cycleLimit: 10, reloadOnFail: true };
   const CONTENT_TYPES = [
     { label: "Chat Messages", slug: "CHAT_REPORT" }, { label: "Whispers", slug: "WHISPER_REPORT" },
@@ -148,24 +148,8 @@
     } catch { return false; }
   }
 
-  async function refreshFingerprint() {
-    let profile = null, rate = null;
-    try { const r = await chrome.runtime.sendMessage({ type: "READ_STATE" }); if (r?.ok && r.data) { profile = r.data.currentProfile || null; rate = r.data.rate || null; } } catch {}
-    if (!profile) { try { const s = await chrome.storage.session.get("tsr_profile_v1"); profile = s?.tsr_profile_v1 || null; } catch {} }
-    if (!rate) { try { const d = await chrome.storage.local.get(K_RATE); rate = d[K_RATE] || null; } catch {} }
-    $("fp-browser").textContent = profile ? profile.browser : "—"; $("fp-platform").textContent = profile ? profile.platform : "—";
-    $("fp-version").textContent = profile ? (profile.browser === "edge" ? `Edge ${profile.version}` : profile.browser === "brave" ? `Brave ${profile.version}` : profile.version) : "—";
-    $("fp-rate").textContent = rate ? `${rate.tokens}/3` : "3/3"; $("fp-ua-full").textContent = profile ? profile.ua : "";
-  }
-
   function wireButtons() {
     $("btn-refresh").addEventListener("click", reloadAll);
-    $("btn-rotate-ua").addEventListener("click", async () => {
-      try { const r = await chrome.runtime.sendMessage({ type: "ROTATE_UA" }); flash(r?.ok ? `UA rotated: ${r.browser} ${r.platform}` : "rotate failed: " + (r?.error || "unknown")); refreshFingerprint(); } catch (e) { flash("rotate failed: " + e.message); }
-    });
-    $("btn-clear-ua").addEventListener("click", async () => {
-      try { const r = await chrome.runtime.sendMessage({ type: "CLEAR_UA" }); flash(r?.ok ? "fingerprint rules cleared" : "clear failed: " + (r?.error || "unknown")); refreshFingerprint(); } catch (e) { flash("clear failed: " + e.message); }
-    });
     $("btn-reset-progress").addEventListener("click", async () => { await chrome.storage.local.set({ [K_PROGRESS]: { usedLines: [], cycleCount: 0, lastUA: null, lastBrowser: null, lastMajor: null, usedEmails: [] } }); flash("progress reset"); });
     $("btn-reset-all").addEventListener("click", async () => {
       if (!confirm("reset settings + progress + emails?")) return;
@@ -202,10 +186,8 @@
         settings = { ...DEFAULT_SETTINGS, ...(changes[K_SETTINGS].newValue || {}) }; delete settings.debug;
         const active = document.activeElement?.id || ""; if (!active.startsWith("s-")) applySettingsToForm();
       }
-      if (changes[K_RATE]) refreshFingerprint();
       loadProgressAndTarget();
     });
-    try { chrome.storage.session.onChanged.addListener(ch => { if (ch.tsr_profile_v1) refreshFingerprint(); }); } catch {}
   }
 
   async function loadProgressAndTarget() {
@@ -217,7 +199,7 @@
     const data = await chrome.storage.local.get([K_SETTINGS, K_PROGRESS, K_EMAILS, K_TARGET]);
     settings = { ...DEFAULT_SETTINGS, ...(data[K_SETTINGS] || {}) }; delete settings.debug;
     applySettingsToForm(); renderProgress(data[K_PROGRESS], settings, data[K_TARGET]);
-    renderEmails(data[K_EMAILS] || []); await refreshFingerprint(); flash("refreshed");
+    renderEmails(data[K_EMAILS] || []); flash("refreshed");
   }
 
   async function init() {
