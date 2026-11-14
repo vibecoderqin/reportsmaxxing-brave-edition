@@ -9,9 +9,8 @@
   }
   if (!HAS_EXT) { showWrongContext(); return; }
 
-  const K_SETTINGS = "tsr_settings_v1", K_PROGRESS = "tsr_progress_v1", K_EMAILS = "tsr_emails_v1", K_TARGET = "tsr_target_channel_v1", K_RATE = "tsr_rate_v2", K_ANTIFP = "tsr_antifp_v1";
+  const K_SETTINGS = "tsr_settings_v1", K_PROGRESS = "tsr_progress_v1", K_EMAILS = "tsr_emails_v1", K_TARGET = "tsr_target_channel_v1", K_RATE = "tsr_rate_v2";
   const DEFAULT_SETTINGS = { content: "Chat Messages", reason: "Hateful Conduct", subreason: "Slurs or Symbols", descriptionText: "", delayMin: 800, delayMax: 1800, timeoutMs: 8000, maxRetries: 3, cycleLimit: 10, reloadOnFail: true };
-  const DEFAULT_ANTIFP = { timezone: true, webrtc: true };
   const CONTENT_TYPES = [
     { label: "Chat Messages", slug: "CHAT_REPORT" }, { label: "Whispers", slug: "WHISPER_REPORT" },
     { label: "Username", slug: "USERNAME_REPORT" }, { label: "User (Avatar, Channel Points, Panels, Tags, etc.)", slug: "USER_REPORT" },
@@ -33,11 +32,11 @@
     "Violence or Gore": { slug: "violence_gore", subs: [] }, "Other Illegality": { slug: "other_illegality", subs: [] }
   };
   const $ = id => document.getElementById(id);
-  let settings = { ...DEFAULT_SETTINGS }, antifp = { ...DEFAULT_ANTIFP }, saveTimer = null;
+  let settings = { ...DEFAULT_SETTINGS }, saveTimer = null;
 
   function saveSettingsSoon() {
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { chrome.storage.local.set({ [K_SETTINGS]: settings, [K_ANTIFP]: antifp }); }, 200);
+    saveTimer = setTimeout(() => { chrome.storage.local.set({ [K_SETTINGS]: settings }); }, 200);
   }
 
   function populateDropdowns() {
@@ -149,20 +148,6 @@
     } catch { return false; }
   }
 
-  function renderAntifpGrid() {
-    const grid = $("afp-grid"); if (!grid) return;
-    grid.innerHTML = "";
-    const labels = { timezone: "Timezone", webrtc: "WebRTC" };
-    for (const [key, label] of Object.entries(labels)) {
-      const stat = document.createElement("div"); stat.className = "stat";
-      const lab = document.createElement("label"); lab.className = "check";
-      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = antifp[key] !== false;
-      cb.addEventListener("change", () => { antifp[key] = cb.checked; saveSettingsSoon(); });
-      lab.appendChild(cb); lab.appendChild(document.createTextNode(" " + label));
-      stat.appendChild(lab); grid.appendChild(stat);
-    }
-  }
-
   async function refreshFingerprint() {
     let profile = null, rate = null;
     try { const r = await chrome.runtime.sendMessage({ type: "READ_STATE" }); if (r?.ok && r.data) { profile = r.data.currentProfile || null; rate = r.data.rate || null; } } catch {}
@@ -184,8 +169,8 @@
     $("btn-reset-progress").addEventListener("click", async () => { await chrome.storage.local.set({ [K_PROGRESS]: { usedLines: [], cycleCount: 0, lastUA: null, lastBrowser: null, lastMajor: null, usedEmails: [] } }); flash("progress reset"); });
     $("btn-reset-all").addEventListener("click", async () => {
       if (!confirm("reset settings + progress + emails?")) return;
-      await chrome.storage.local.set({ [K_SETTINGS]: { ...DEFAULT_SETTINGS }, [K_PROGRESS]: { usedLines: [], cycleCount: 0, lastUA: null, lastBrowser: null, lastMajor: null, usedEmails: [] }, [K_EMAILS]: [], [K_TARGET]: null, [K_ANTIFP]: { ...DEFAULT_ANTIFP } });
-      settings = { ...DEFAULT_SETTINGS }; antifp = { ...DEFAULT_ANTIFP }; applySettingsToForm(); renderAntifpGrid(); flash("everything reset");
+      await chrome.storage.local.set({ [K_SETTINGS]: { ...DEFAULT_SETTINGS }, [K_PROGRESS]: { usedLines: [], cycleCount: 0, lastUA: null, lastBrowser: null, lastMajor: null, usedEmails: [] }, [K_EMAILS]: [], [K_TARGET]: null });
+      settings = { ...DEFAULT_SETTINGS }; applySettingsToForm(); flash("everything reset");
     });
     $("btn-clear-emails").addEventListener("click", async () => { await chrome.storage.local.set({ [K_EMAILS]: [] }); flash("emails cleared"); });
     $("btn-copy-emails").addEventListener("click", async () => {
@@ -217,7 +202,6 @@
         settings = { ...DEFAULT_SETTINGS, ...(changes[K_SETTINGS].newValue || {}) }; delete settings.debug;
         const active = document.activeElement?.id || ""; if (!active.startsWith("s-")) applySettingsToForm();
       }
-      if (changes[K_ANTIFP]) { antifp = { ...DEFAULT_ANTIFP, ...(changes[K_ANTIFP].newValue || {}) }; renderAntifpGrid(); }
       if (changes[K_RATE]) refreshFingerprint();
       loadProgressAndTarget();
     });
@@ -230,10 +214,9 @@
   }
 
   async function reloadAll() {
-    const data = await chrome.storage.local.get([K_SETTINGS, K_PROGRESS, K_EMAILS, K_TARGET, K_ANTIFP]);
+    const data = await chrome.storage.local.get([K_SETTINGS, K_PROGRESS, K_EMAILS, K_TARGET]);
     settings = { ...DEFAULT_SETTINGS, ...(data[K_SETTINGS] || {}) }; delete settings.debug;
-    antifp = { ...DEFAULT_ANTIFP, ...(data[K_ANTIFP] || {}) };
-    applySettingsToForm(); renderAntifpGrid(); renderProgress(data[K_PROGRESS], settings, data[K_TARGET]);
+    applySettingsToForm(); renderProgress(data[K_PROGRESS], settings, data[K_TARGET]);
     renderEmails(data[K_EMAILS] || []); await refreshFingerprint(); flash("refreshed");
   }
 
