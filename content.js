@@ -10,6 +10,7 @@
   const K_RESUME = "tsr_resume_v1";
   const K_TARGET = "tsr_target_channel_v1";
   const K_EMAILS = "tsr_emails_v1";
+  const K_ANTIFP = "tsr_antifp_v1";
   const EMAIL_LIMIT = 2000;
   const USED_EMAILS_LIMIT = 5000;
   const RESUME_SETTLE_MS = 3000;
@@ -20,10 +21,11 @@
     descriptionText: "", delayMin: 800, delayMax: 1800, timeoutMs: 8000,
     maxRetries: 3, cycleLimit: 10, reloadOnFail: true
   };
+  const DEFAULT_ANTIFP = { timezone: true, webrtc: true };
   const DEFAULT_PROGRESS = { usedLines: [], cycleCount: 0, lastUA: null, lastBrowser: null, lastMajor: null, usedEmails: [] };
 
   const state = {
-    running: false, settings: { ...DEFAULT_SETTINGS },
+    running: false, settings: { ...DEFAULT_SETTINGS }, antifp: { ...DEFAULT_ANTIFP },
     progress: { ...DEFAULT_PROGRESS }, currentStep: null, currentLine: null,
     usedSearchReason: false, targetChannel: null, challengeStrikes: 0
   };
@@ -158,11 +160,12 @@
 
   async function loadAll() {
     try {
-      const data = await chrome.storage.local.get([K_SETTINGS, K_PROGRESS, K_POS, K_TARGET, K_EMAILS ]);
+      const data = await chrome.storage.local.get([K_SETTINGS, K_PROGRESS, K_POS, K_TARGET, K_EMAILS, K_ANTIFP]);
       if (data[K_SETTINGS]) state.settings = { ...DEFAULT_SETTINGS, ...data[K_SETTINGS] };
       delete state.settings.debug;
       if (data[K_PROGRESS]) state.progress = { ...DEFAULT_PROGRESS, ...data[K_PROGRESS] };
       if (data[K_TARGET]) state.targetChannel = data[K_TARGET];
+      if (data[K_ANTIFP]) state.antifp = { ...DEFAULT_ANTIFP, ...data[K_ANTIFP] };
       usedEmailsSet = new Set(Array.isArray(state.progress.usedEmails) ? state.progress.usedEmails : []);
       const log = Array.isArray(data[K_EMAILS]) ? data[K_EMAILS] : [];
       for (const rec of log) if (rec && typeof rec.email === "string") usedEmailsSet.add(rec.email);
@@ -175,17 +178,17 @@
   function persistSoon() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress });
+      chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress, [K_ANTIFP]: state.antifp });
     }, 200);
   }
   async function persistNow() {
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-    await chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress });
+    await chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress, [K_ANTIFP]: state.antifp });
   }
 
   const SEL = {
-    moreOptions: ['button[data-a-target="report-button-more-button"]','button[aria-label="More options"]','button[aria-label="Plus d\'options"]','button[aria-label="M├ís opciones"]','button[aria-label="Mais op├º├Áes"]','button[aria-label="Weitere Optionen"]','button[aria-label="Altre opzioni"]','button[aria-label="ðöð¥ð┐ð¥ð╗ð¢ð©ÐéðÁð╗Ðîð¢ÐïðÁ ð┐ð░ÐÇð░ð╝ðÁÐéÐÇÐï"]','button[title="More options"]'],
-    reportChannel: ['button[data-a-target="report-button-report-button"]','button[aria-label="Report Channel"]','button[aria-label="Signaler la cha├«ne"]','button[aria-label="Denunciar el canal"]','button[aria-label="Informar sobre el canal"]','button[aria-label="Denunciar canal"]','button[aria-label="Kanal melden"]','button[aria-label="Segnala il canale"]','button[aria-label="ðƒð¥ðÂð░ð╗ð¥ð▓ð░ÐéÐîÐüÐÅ ð¢ð░ ð║ð░ð¢ð░ð╗"]'],
+    moreOptions: ['button[data-a-target="report-button-more-button"]','button[aria-label="More options"]','button[title="More options"]'],
+    reportChannel: ['button[data-a-target="report-button-report-button"]','button[aria-label="Report Channel"]'],
     contentRadio: 'input[name="content-select-radio-group"]', reasonRadio: 'input[name="reason-select-radio-group"]',
     reasonSearchRadio: 'input[name="reason-search-radio-group"]', detailRadio: 'input[name="detailed-reason-select-radio"]',
     next: ['button[data-a-target="form-navigation-next"]','[data-a-target="form-navigation-next"]'],
@@ -196,62 +199,62 @@
     captcha: ['iframe[src*="captcha"]','[data-a-target="captcha"]','div.g-recaptcha']
   };
   const CHANNEL_BTN_TARGET = "report-button-report-button";
-  const REPORT_CHANNEL_PATTERNS = [/report\s+channel/i,/report\s+.*channel/i,/kanal\s+melden/i,/kanal\s+reporten/i,/kanal\s+berichten/i,/├╝ber\s+.*kanal\s+berichten/i,/signaler\s+la\s+cha[i├«]ne/i,/signaler\s+la\s+chaine/i,/signaler\s+.*cha[i├«]ne/i,/denunciar\s+(el\s+)?canal/i,/informar\s+sobre\s+(el\s+)?canal/i,/reportar\s+(o\s+)?canal/i,/denunciar\s+canal/i,/segnala\s+(il\s+)?canale/i,/rapporter\s+kanal/i,/rapportera\s+kanal/i,/rapporteer\s+kanaal/i,/raportuj\s+kanal/i,/kanal─▒\s+┼ƒikayet\s+et/i,/ð┐ð¥ðÂð░ð╗ð¥ð▓ð░ÐéÐîÐüÐÅ\s+ð¢ð░\s+ð║ð░ð¢ð░ð╗/i,/õ©¥µèÑÚóæÚüô/,/ÚÇÜÕá▒ÒâüÒâúÒâ│ÒâìÒâ½/,/ÒâüÒâúÒâ│ÒâìÒâ½ÒéÆÕá▒Õæè/,/ý▒äÙäÉ\s*ýïáÛ│á/];
-  const FILE_REPORT_PATTERNS = [/file\s+a\s+report/i,/submit\s+a\s+report/i,/send\s+(a\s+)?report/i,/report\s+user/i,/file\s+report/i,/create\s+report/i,/eine\s+meldung\s+einreichen/i,/meldung\s+einreichen/i,/bericht\s+einreichen/i,/einen\s+versto[s├ƒ]\s+melden/i,/versto[s├ƒ]\s+melden/i,/envoyer\s+un\s+signalement/i,/envoyer\s+un\s+rapport/i,/signaler\s+un\s+rapport/i,/signaler\s+un\s+signalement/i,/enviar\s+un\s+informe/i,/enviar\s+un\s+reporte/i,/denunciar\s+un\s+reporte/i,/enviar\s+uma\s+den[u├║]ncia/i,/enviar\s+den[u├║]ncia/i,/invia\s+una\s+segnalazione/i,/invia\s+un.*segnalazione/i,/segnala\s+un.*segnalazione/i,/skicka\s+en\s+anm├ñlan/i,/anm├ñl/i,/ð┐ð¥ð┤ð░ÐéÐî\s+ðÂð░ð╗ð¥ð▒Ðâ/i,/ð¥Ðéð┐ÐÇð░ð▓ð©ÐéÐî\s+ðÂð░ð╗ð¥ð▒Ðâ/i,/ð┐ð¥ðÂð░ð╗ð¥ð▓ð░ÐéÐîÐüÐÅ/i,/Ðüð¥ð¥ð▒Ðëð©ÐéÐî\s+ð¥\s+ð¢ð░ÐÇÐâÐêðÁð¢ð©ð©/i,/õ©¥µèÑ/,/µèÑÕæè/,/ÚÇÜÕá▒/,/Õá▒Õæè/,/ýïáÛ│á/,/┼ƒikayet\s+et/i,/bildir/i];
-  const BLOCK_EXCLUDE_PATTERNS = [/^block/i,/^blocking/i,/^blockieren/i,/^blockera/i,/^blocca/i,/^bloquer/i,/^bloquear/i,/^bloc\b/i,/^ð▒ð╗ð¥ð║/i,/^ðÀð░ð▒ð╗ð¥ð║ð©ÐÇð¥ð▓ð░ÐéÐî/i,/^Õ▒ÅÞö¢/i,/^ÒâûÒâ¡ÒââÒé»/,/^ý░¿Ùï¿/,/^engelle/i,/^cancel/i,/^abbrechen/i,/^annuler/i,/^cancelar/i,/^annulla/i,/^avbryt/i,/^annuller/i,/^anuluj/i,/^iptal/i,/^ÕÅûµÂê/,/^Òé¡ÒâúÒâ│Òé╗Òâ½/,/^ýÀ¿ýåî/,/^close$/i,/^schlie[s├ƒ]en$/i,/^fermer$/i,/^cerrar$/i,/^chiudi$/i,/^st├ñng$/i,/^sluiten$/i,/^ðÀð░ð║ÐÇÐïÐéÐî$/i,/^ðÀð░ð║ÐÇð©ÐéÐ©$/i,/^Õà│Úù¡$/,/^ÚûëÒüÿÒéï$/,/^Ùï½Û©░$/,/^kapat$/i,/^anmelden$/i,/^einloggen$/i,/^log\s*in$/i,/^login$/i,/^sign\s*in$/i,/^sign\s*up$/i,/^register$/i,/^registrieren$/i,/^s'?inscrire$/i,/^connexion$/i,/^se\s+connecter$/i,/^iniciar\s+sesi[o├│]n$/i,/^entrar$/i,/^accedi$/i,/^acceder$/i,/^ð▓ð¥ð╣Ðéð©$/i,/^ð▓Ðàð¥ð┤$/i,/^µ│¿Õåî$/,/^Òâ¡Òé░ÒéñÒâ│$/,/^Ùí£ÛÀ©ýØ©$/i,/^giri[s┼ƒ]\s+yap$/i];
+  const REPORT_CHANNEL_PATTERNS = [/report\s+channel/i,/report\s+.*channel/i];
+  const FILE_REPORT_PATTERNS = [/file\s+a\s+report/i,/submit\s+a\s+report/i,/send\s+(a\s+)?report/i,/report\s+user/i,/file\s+report/i,/create\s+report/i];
+  const BLOCK_EXCLUDE_PATTERNS = [/^block/i,/^blocking/i,/^cancel/i,/^close$/i,/^log\s*in$/i,/^login$/i,/^sign\s*in$/i,/^sign\s*up$/i,/^register$/i];
 
   const REASON_LABELS_I18N = {
-    "Ban Evasion": ["Ban Evasion","Contournement de bannissement","Contournement de ban","Evas├úo de banimento","Evas├úo de ban","Umgehung einer Sperre","Sperrumgehung","Elusi├│n de expulsi├│n","Evasione del ban","ð×ð▒Ðàð¥ð┤ ð▒ð╗ð¥ð║ð©ÐÇð¥ð▓ð║ð©","ð×ð▒Ðàð¥ð┤ ð▒ð░ð¢ð░","Nar─▒ i╠çhlali","Yasak atlatma","ÞºäÚü┐Õ░üþªü","Õ░üÚÄûÕø×Úü┐","Ù░┤ ÝÜîÝö╝"],
-    "Bullying or Harassment": ["Bullying or Harassment","Intimidation ou harc├¿lement","Bullying ou ass├®dio","Ass├®dio","Mobbing oder Bel├ñstigung","Bel├ñstigung","Acoso o intimidaci├│n","Acoso","Bullismo o molestie","ð£ð¥ð▒ð▒ð©ð¢ð│ ð©ð╗ð© ð┤ð¥ð╝ð¥ð│ð░ÐéðÁð╗ÐîÐüÐéð▓ð░","ðöð¥ð╝ð¥ð│ð░ÐéðÁð╗ÐîÐüÐéð▓ð░","Taciz veya zorbal─▒k","Zorbal─▒k","µ¼║ÕçîµêûÚ¬Üµë░","ÒüäÒüÿÒéüÒâ╗Õ½îÒüîÒéëÒüø","Û┤┤Ùí¡Ý×ÿ ÙÿÉÙèö Û┤┤Ùí¡Ý×ÿ"],
-    "Cheating in Game": ["Cheating in Game","Triche en jeu","Trapa├ºa no jogo","Cheating im Spiel","Schummeln","Hacer trampa en el juego","Trucchi nel gioco","ðºð©ÐéðÁÐÇÐüÐéð▓ð¥ ð▓ ð©ð│ÐÇðÁ","ðºð©ÐéðÁÐÇÐüÐéð▓ð¥","Oyunda hile","µ©©µêÅõ¢£Õ╝è","Òé▓Òâ╝ÒâáÒüºÒü«ÒâüÒâ╝Òâê","Û▓îý×ä Ùé┤ ÙÂÇýáòÝûëý£ä"],
-    "Explicit Harm": ["Explicit Harm","Pr├®judice explicite","Dano expl├¡cito","Explizite Sch├ñdigung","Da├▒o expl├¡cito","Danno esplicito","ð»ð▓ð¢Ðïð╣ ð▓ÐÇðÁð┤","A├º─▒k zarar","µÿÄþí«þÜäõ╝ñÕ«│","µÿÄþñ║þÜäÒü¬Õì▒Õ«│","Ù¬àÙ░▒Ýò£ Ýö╝Ýò┤"],
-    "Hateful Conduct": ["Hateful Conduct","Conduite haineuse","Conduta de ├│dio","Hasserf├╝lltes Verhalten","Hassverhalten","Conducta de odio","Condotta d'odio","Odio","ðÆÐÇð░ðÂð┤ðÁð▒ð¢ð¥ðÁ ð┐ð¥ð▓ðÁð┤ðÁð¢ð©ðÁ","Nefret i├ºerikli davran─▒┼ƒ","Nefret s├Âylemi","õ╗çµü¿Þíîõ©║","ÒâÿÒéñÒâêÞíîþé║","ÝÿÉýÿ¤ Ýûëý£ä"],
-    "IP Violation": ["IP Violation","Violation de propri├®t├® intellectuelle","Viola├º├úo de PI","Urheberrechtsverletzung","IP-Verletzung","Violaci├│n de PI","Violazione di PI","ðØð░ÐÇÐâÐêðÁð¢ð©ðÁ ð┐ÐÇð░ð▓ ðÿðí","Fikri m├╝lkiyet ihlali","õ¥Áþè»þƒÑÞ»åõ║ºµØâ","þƒÑþÜäÞ▓íþöúµ¿®Òü«õ¥ÁÕ«│","ýºÇýïØ ý×¼ýé░ÛÂî ý╣¿Ýò┤"],
-    "Impersonation": ["Impersonation","Usurpation d'identit├®","Personifica├º├úo","Identit├ñtst├ñuschung","Impersonaci├│n","Impersonificazione","ðÆÐïð┤ð░Ðçð░ ÐüðÁð▒ÐÅ ðÀð░ ð┤ÐÇÐâð│ð¥ð│ð¥","Kimli─ƒe b├╝r├╝nme","ÕåÆÕààõ╗ûõ║║","Òü¬ÒéèÒüÖÒü¥Òüù","ýé¼ý╣¡"],
-    "Misinformation": ["Misinformation","D├®sinformation","Desinforma├º├úo","Fehlinformation","Desinformaci├│n","Disinformazione","ðöðÁðÀð©ð¢Ðäð¥ÐÇð╝ð░Ðåð©ÐÅ","Yanl─▒┼ƒ bilgi","ÞÖÜÕüçõ┐íµü»","Þ¬ñµâàÕá▒","Ýùêý£ä ýáòÙ│┤"],
-    "Nudity or Sexually Explicit": ["Nudity or Sexually Explicit","Nudit├® ou contenu sexuellement explicite","Nudez ou conte├║do sexualmente expl├¡cito","Nacktheit oder sexuell explizite Inhalte","Nudez o contenido sexual expl├¡cito","Nudit├á o contenuti sessualmente espliciti","ðØð░ð│ð¥Ðéð░ ð©ð╗ð© ð¥Ðéð║ÐÇð¥ð▓ðÁð¢ð¢ð¥ ÐüðÁð║ÐüÐâð░ð╗Ðîð¢Ðïð╣ ð║ð¥ð¢ÐéðÁð¢Ðé","├ç─▒plakl─▒k veya cinsel i├ºerik","Þú©õ¢ôµêûÚ£▓Ú¬¿Þë▓µâàÕåàÕ«╣","Þú©õ¢ôÒü¥ÒüƒÒü»µÇºþÜäÒü½Ú£▓Ú¬¿Òü¬Þí¿þÅ¥","Ùà©ýÂ£ ÙÿÉÙèö ýä▒ýáüý£╝Ùí£ Ùà©Û│¿ýáüýØ© ý¢ÿÝàÉý©á"],
-    "Off Twitch Behavior": ["Off Twitch Behavior","Comportement hors Twitch","Comportamento fora da Twitch","Verhalten au├ƒerhalb von Twitch","Comportamiento fuera de Twitch","Comportamento fuori da Twitch","ðƒð¥ð▓ðÁð┤ðÁð¢ð©ðÁ ðÀð░ ð┐ÐÇðÁð┤ðÁð╗ð░ð╝ð© Twitch","Twitch d─▒┼ƒ─▒ davran─▒┼ƒ","Twitch Õ╣│ÕÅ░ÕñûþÜäÞíîõ©║","Twitch ÕñûÒüºÒü«Þíîþé║","Twitch ýÖ© ÝûëÙÅÖ"],
-    "Self-Harm": ["Self-Harm","Automutilation","Automutila├º├úo","Selbstverletzung","Selbstverletzendes Verhalten","Autolesi├│n","Autolesionismo","ðíð░ð╝ð¥ð┐ð¥ð▓ÐÇðÁðÂð┤ðÁð¢ð©ðÁ","Kendine zarar verme","Þç¬µ«ï","Þç¬ÕéÀÞíîþé║","ý×ÉÝò┤"],
-    "Spam, Scams, Bots, or Tampering": ["Spam, Scams, Bots, or Tampering","Spam, arnaques, bots ou manipulation","Spam, golpes, bots ou manipula├º├úo","Spam, Betrug, Bots oder Manipulation","Spam, escroquerie, bots, alt├®ration de fichiers","Spam, estafas, bots o manipulaci├│n","Spam, truffe, bot o manomissione","ðíð┐ð░ð╝, ð╝ð¥ÐêðÁð¢ð¢ð©ÐçðÁÐüÐéð▓ð¥, ð▒ð¥ÐéÐï ð©ð╗ð© ð▓ð╝ðÁÐêð░ÐéðÁð╗ÐîÐüÐéð▓ð¥","Spam, doland─▒r─▒c─▒l─▒k, botlar veya kurcalama","Õ×âÕ£¥õ┐íµü»ÒÇüÞ»êÚ¬ùÒÇüµ£║ÕÖ¿õ║║µêûþ»íµö╣","Òé╣ÒâæÒâáÒÇüÞ®Éµ¼║ÒÇüÒâ£ÒââÒâêÒÇüµö╣ÒüûÒéô","ýèñÝî©, ýé¼Û©░, Ù┤ç ÙÿÉÙèö Ù│Çýí░"],
-    "Terrorism": ["Terrorism","Terrorisme","Terrorismo","Terrorismus","ðóðÁÐÇÐÇð¥ÐÇð©ðÀð╝","Ter├Ârizm","µüÉµÇûõ©╗õ╣ë","ÒâåÒâ¡Òâ¬Òé║Òâá","ÝàîÙƒ¼Ùª¼ýªÿ"],
-    "Underage User": ["Underage User","Utilisateur mineur","Usu├írio menor de idade","Minderj├ñhriger Nutzer","Usuario menor de edad","Utente minorenne","ðØðÁÐüð¥ð▓ðÁÐÇÐêðÁð¢ð¢ð¥ð╗ðÁÐéð¢ð©ð╣ ð┐ð¥ð╗ÐîðÀð¥ð▓ð░ÐéðÁð╗Ðî","Re┼ƒit olmayan kullan─▒c─▒","µ£¬µêÉÕ╣┤þö¿µêÀ","µ£¬µêÉÕ╣┤ÒâªÒâ╝ÒéÂÒâ╝","Ù»©ýä▒Ùàäý×É ýé¼ýÜ®ý×É"],
-    "Violence or Gore": ["Violence or Gore","Violence ou contenu sanglant","Viol├¬ncia ou conte├║do sangrento","Gewalt oder Blut","Gewalt oder Gore","Violencia o sangre","Violenza o sangue","ðØð░Ðüð©ð╗ð©ðÁ ð©ð╗ð© ðÂðÁÐüÐéð¥ð║ð¥ÐüÐéÐî","┼×iddet veya vah┼ƒet","µÜ┤ÕèøµêûÞíÇÞàÑ","µÜ┤ÕèøÒü¥ÒüƒÒü»µÁüÞíÇ","ÝÅ¡ÙáÑ ÙÿÉÙèö ý£áÝÿê"],
-    "Other Illegality": ["Other Illegality","Autre activit├® ill├®gale","Outra ilegalidade","Sonstige Illegalit├ñt","Otra ilegalidad","Altra illegalit├á","ðÿð¢ð░ÐÅ ð¢ðÁðÀð░ð║ð¥ð¢ð¢ð░ÐÅ ð┤ðÁÐÅÐéðÁð╗Ðîð¢ð¥ÐüÐéÐî","Di─ƒer yasa d─▒┼ƒ─▒l─▒k","ÕàÂõ╗ûÞ┐Øµ│òÞíîõ©║","ÒüØÒü«õ╗ûÒü«Úüòµ│òÞíîþé║","Û©░ÝâÇ ÙÂêÙ▓ò Ýûëý£ä"]
+    "Ban Evasion": ["Ban Evasion"],
+    "Bullying or Harassment": ["Bullying or Harassment"],
+    "Cheating in Game": ["Cheating in Game"],
+    "Explicit Harm": ["Explicit Harm"],
+    "Hateful Conduct": ["Hateful Conduct"],
+    "IP Violation": ["IP Violation"],
+    "Impersonation": ["Impersonation"],
+    "Misinformation": ["Misinformation"],
+    "Nudity or Sexually Explicit": ["Nudity or Sexually Explicit"],
+    "Off Twitch Behavior": ["Off Twitch Behavior"],
+    "Self-Harm": ["Self-Harm"],
+    "Spam, Scams, Bots, or Tampering": ["Spam, Scams, Bots, or Tampering"],
+    "Terrorism": ["Terrorism"],
+    "Underage User": ["Underage User"],
+    "Violence or Gore": ["Violence or Gore"],
+    "Other Illegality": ["Other Illegality"]
   };
   const SUB_LABELS_I18N = {
-    "Account Ban Evasion": ["Account Ban Evasion","Contournement de bannissement de compte","Evas├úo de banimento de conta"],
-    "Aiding Ban Evasion": ["Aiding Ban Evasion","Aide au contournement de bannissement","Aux├¡lio ├á evas├úo de banimento"],
-    "Advocating Harassment": ["Advocating Harassment","Incitation au harc├¿lement","Incentivo ao ass├®dio"],
-    "Coordinating Harassment": ["Coordinating Harassment","Coordination de harc├¿lement","Coordena├º├úo de ass├®dio"],
-    "Malicious Pranks": ["Malicious Pranks","Farces malveillantes","Pegadinhas maliciosas"],
-    "Revealing Personal Information": ["Revealing Personal Information","Divulgation d'informations personnelles","Divulga├º├úo de informa├º├Áes pessoais","Doxxing"],
-    "Targeted Abuse": ["Targeted Abuse","Abus cibl├®","Abuso direcionado"],
-    "Unwanted Sexual Advances": ["Unwanted Sexual Advances","Avances sexuelles non d├®sir├®es","Avan├ºos sexuais indesejados"],
-    "Animal Endangerment": ["Animal Endangerment","Mise en danger d'animaux","Colocando animais em perigo"],
-    "Child Endangerment": ["Child Endangerment","Mise en danger d'enfants","Colocando crian├ºas em perigo"],
-    "Swatting": ["Swatting","Swatting","Swatting"],
-    "Slurs or Symbols": ["Slurs or Symbols","Insultes ou symboles","Inj├║rias ou s├¡mbolos"],
-    "Encouraging Hateful Behavior": ["Encouraging Hateful Behavior","Encouragement au comportement haineux","Incentivo a comportamento de ├│dio"],
-    "Threatening Violence": ["Threatening Violence","Menaces de violence","Amea├ºas de viol├¬ncia"],
-    "Mocking Trauma": ["Mocking Trauma","Moquerie du traumatisme","Zombaria de trauma"],
-    "Sexually Explicit": ["Sexually Explicit","Sexuellement explicite","Sexualmente expl├¡cito"],
-    "Sexual Violence": ["Sexual Violence","Violence sexuelle","Viol├¬ncia sexual"],
-    "Full or Partial Nudity": ["Full or Partial Nudity","Nudit├® totale ou partielle","Nudez total ou parcial"],
-    "Sexual Conduct Involving Minors": ["Sexual Conduct Involving Minors","Conduite sexuelle impliquant des mineurs","Conduta sexual envolvendo menores"],
-    "Sharing Private Images": ["Sharing Private Images","Partage d'images priv├®es","Compartilhamento de imagens privadas"],
-    "Intentional Self-Harm": ["Intentional Self-Harm","Automutilation intentionnelle","Automutila├º├úo intencional"],
-    "Threatening Self-Harm": ["Threatening Self-Harm","Menace d'automutilation","Amea├ºa de automutila├º├úo"],
-    "Encouraging Others to Self-Harm": ["Encouraging Others to Self-Harm","Encouragement d'autrui ├á l'automutilation","Incentivo a outros ├á automutila├º├úo"],
-    "Spam": ["Spam","Spam","Spam"], "Scam": ["Scam","Arnaque","Golpe"], "Bots": ["Bots","Bots","Bots"],
-    "Cyber Attack": ["Cyber Attack","Cyberattaque","Ataque cibern├®tico"],
-    "Viewership Tampering": ["Viewership Tampering","Manipulation des audiences","Manipula├º├úo de audi├¬ncia"]
+    "Account Ban Evasion": ["Account Ban Evasion"],
+    "Aiding Ban Evasion": ["Aiding Ban Evasion"],
+    "Advocating Harassment": ["Advocating Harassment"],
+    "Coordinating Harassment": ["Coordinating Harassment"],
+    "Malicious Pranks": ["Malicious Pranks"],
+    "Revealing Personal Information": ["Revealing Personal Information","Doxxing"],
+    "Targeted Abuse": ["Targeted Abuse"],
+    "Unwanted Sexual Advances": ["Unwanted Sexual Advances"],
+    "Animal Endangerment": ["Animal Endangerment"],
+    "Child Endangerment": ["Child Endangerment"],
+    "Swatting": ["Swatting"],
+    "Slurs or Symbols": ["Slurs or Symbols"],
+    "Encouraging Hateful Behavior": ["Encouraging Hateful Behavior"],
+    "Threatening Violence": ["Threatening Violence"],
+    "Mocking Trauma": ["Mocking Trauma"],
+    "Sexually Explicit": ["Sexually Explicit"],
+    "Sexual Violence": ["Sexual Violence"],
+    "Full or Partial Nudity": ["Full or Partial Nudity"],
+    "Sexual Conduct Involving Minors": ["Sexual Conduct Involving Minors"],
+    "Sharing Private Images": ["Sharing Private Images"],
+    "Intentional Self-Harm": ["Intentional Self-Harm"],
+    "Threatening Self-Harm": ["Threatening Self-Harm"],
+    "Encouraging Others to Self-Harm": ["Encouraging Others to Self-Harm"],
+    "Spam": ["Spam"], "Scam": ["Scam"], "Bots": ["Bots"],
+    "Cyber Attack": ["Cyber Attack"],
+    "Viewership Tampering": ["Viewership Tampering"]
   };
   const CONTENT_LABELS_I18N = {
-    "Chat Messages": ["Chat Messages","Messages de chat","Mensagens de chat","Chat-Nachrichten","Mensajes de chat","Messaggi in chat"],
-    "Whispers": ["Whispers","Chuchotements","Sussurros","Fl├╝stern","Susurros","Sussurri"],
-    "Username": ["Username","Nom d'utilisateur","Nome de usu├írio","Benutzername","Nombre de usuario","Nome utente"],
-    "User (Avatar, Channel Points, Panels, Tags, etc.)": ["User (Avatar, Channel Points, Panels, Tags, etc.)","Utilisateur (avatar, points de cha├«ne, panneaux, tags, etc.)","Usu├írio (avatar, pontos do canal, pain├®is, tags, etc.)","Benutzer (Avatar, Kanalpunkte, Panels, Tags usw.)","Usuario (avatar, puntos de canal, paneles, etiquetas, etc.)","Utente (avatar, punti canale, pannelli, tag, ecc.)"],
-    "Off Twitch Behavior": ["Off Twitch Behavior","Comportement hors Twitch","Comportamento fora da Twitch"]
+    "Chat Messages": ["Chat Messages"],
+    "Whispers": ["Whispers"],
+    "Username": ["Username"],
+    "User (Avatar, Channel Points, Panels, Tags, etc.)": ["User (Avatar, Channel Points, Panels, Tags, etc.)"],
+    "Off Twitch Behavior": ["Off Twitch Behavior"]
   };
 
   function findClickable(patterns, scope = document, excludes = null) {
@@ -295,7 +298,7 @@
         if (/block|blockieren|bloquer|bloquear|blocca|blockera|engelle/i.test(h)) continue;
         return good[0];
       }
-      const byAt = good.find(b => /report|submit|file|signal|denunc|inform|segnala|melden|bericht|ðÂð░ð╗ð¥ð▒|bildir|õ©¥µèÑ|ÚÇÜÕá▒|ýïáÛ│á/i.test(b.getAttribute("data-a-target") || ""));
+      const byAt = good.find(b => /report|submit|file|signal|denunc|inform|segnala|melden|bericht/i.test(b.getAttribute("data-a-target") || ""));
       if (byAt) return byAt;
       const byCls = good.find(b => /primary/i.test(b.className || ""));
       if (byCls) return byCls;
@@ -503,16 +506,16 @@
     { name: "open-menu", screen: "channel page (menu closed)", detect: () => qs(SEL.moreOptions), action: async () => { const b = qs(SEL.moreOptions); if (!b) throw new Error("more-options button not found"); b.click(); } },
     { name: "click-report", screen: "channel menu (Report item)", detect: () => qs(SEL.reportChannel) || findClickable(REPORT_CHANNEL_PATTERNS, document, BLOCK_EXCLUDE_PATTERNS), action: async () => { const b = qs(SEL.reportChannel) || findClickable(REPORT_CHANNEL_PATTERNS, document, BLOCK_EXCLUDE_PATTERNS); if (!b) throw new Error("report channel button not found"); b.click(); } },
     { name: "click-file-report", screen: "'File a Report' prompt", detect: () => findFileReportButton(), action: async () => { const b = findFileReportButton(); if (!b) throw new Error("file-a-report button not found"); b.click(); } },
-    { name: "wizard-content", screen: "wizard ┬À step 1 (content type)", detect: () => { const w = getWizard(); return w && w.querySelector('input[name="content-select-radio-group"]'); }, action: async () => { const ct = CONTENT_TYPES.find(c => c.label === state.settings.content) || CONTENT_TYPES[0]; await pickRadio("content-select-radio-group", ct.slug, getContentLabels(ct.label)); await clickNext(); } },
-    { name: "wizard-reason", screen: "wizard ┬À step 2 (reason)", detect: () => { if (state.settings.reason === "Off Twitch Behavior") return "skipped"; const w = getWizard(); return w && w.querySelector('input[name="reason-select-radio-group"]'); }, action: async () => {
+    { name: "wizard-content", screen: "wizard \u00B7 step 1 (content type)", detect: () => { const w = getWizard(); return w && w.querySelector('input[name="content-select-radio-group"]'); }, action: async () => { const ct = CONTENT_TYPES.find(c => c.label === state.settings.content) || CONTENT_TYPES[0]; await pickRadio("content-select-radio-group", ct.slug, getContentLabels(ct.label)); await clickNext(); } },
+    { name: "wizard-reason", screen: "wizard \u00B7 step 2 (reason)", detect: () => { if (state.settings.reason === "Off Twitch Behavior") return "skipped"; const w = getWizard(); return w && w.querySelector('input[name="reason-select-radio-group"]'); }, action: async () => {
       const r = REASONS[state.settings.reason]; const w = getWizard(); if (!r || !w) throw new Error("reason state invalid");
       const labels = getReasonLabels(state.settings.reason);
       if (r.slug && clickRadioBySlug("reason-select-radio-group", r.slug, w)) { state.usedSearchReason = false; await clickNext(); return; }
       if (clickRadioByAnyLabel("reason-select-radio-group", labels, w)) { state.usedSearchReason = false; await clickNext(); return; }
-      if (!clickRadioBySlug("reason-select-radio-group", "searching-other", w) && !clickRadioByAnyLabel("reason-select-radio-group", ["Search","Rechercher","Buscar","Pesquisar","Suchen","Cerca","ðƒð¥ð©Ðüð║","Ara","µÉ£þ┤ó","µñ£þ┤ó","Û▓Çýâë"], w)) throw new Error(`Search radio not found (reason="${state.settings.reason}")`);
+      if (!clickRadioBySlug("reason-select-radio-group", "searching-other", w) && !clickRadioByAnyLabel("reason-select-radio-group", ["Search"], w)) throw new Error(`Search radio not found (reason="${state.settings.reason}")`);
       state.usedSearchReason = true; await clickNext();
     } },
-    { name: "wizard-search-pick", screen: "wizard ┬À search results", detect: () => { if (state.settings.reason === "Off Twitch Behavior" || !state.usedSearchReason) return "skipped"; const w = getWizard(); return w && w.querySelector('input[name="reason-search-radio-group"]'); }, action: async () => {
+    { name: "wizard-search-pick", screen: "wizard \u00B7 search results", detect: () => { if (state.settings.reason === "Off Twitch Behavior" || !state.usedSearchReason) return "skipped"; const w = getWizard(); return w && w.querySelector('input[name="reason-search-radio-group"]'); }, action: async () => {
       const w = getWizard(); if (!w) throw new Error("wizard not mounted");
       const sub = state.settings.subreason, target = sub || state.settings.reason;
       const slug = subToSlug(target), labels = sub ? getSubLabels(sub) : getReasonLabels(state.settings.reason);
@@ -524,14 +527,14 @@
       if (!all.length) throw new Error(`no search results rendered (target="${target}")`);
       throw new Error(`search result not matched (slug="${slug}")`);
     } },
-    { name: "wizard-detail", screen: "wizard ┬À step 3 (detailed reason)", detect: () => { if (state.settings.reason === "Off Twitch Behavior" || state.usedSearchReason) return "skipped"; const r = REASONS[state.settings.reason]; if (!r || !r.subs.length) return "skipped"; const w = getWizard(); return w && w.querySelector('input[name="detailed-reason-select-radio"]'); }, action: async () => {
+    { name: "wizard-detail", screen: "wizard \u00B7 step 3 (detailed reason)", detect: () => { if (state.settings.reason === "Off Twitch Behavior" || state.usedSearchReason) return "skipped"; const r = REASONS[state.settings.reason]; if (!r || !r.subs.length) return "skipped"; const w = getWizard(); return w && w.querySelector('input[name="detailed-reason-select-radio"]'); }, action: async () => {
       const r = REASONS[state.settings.reason]; if (!r || !r.subs.length) return;
       if (!state.settings.subreason) throw new Error("reason requires a detailed reason");
       await pickRadio("detailed-reason-select-radio", subToSlug(state.settings.subreason), getSubLabels(state.settings.subreason));
       await clickNext();
     } },
-    { name: "wizard-description", screen: "wizard ┬À step 4 (description)", detect: () => { if (state.settings.reason === "Off Twitch Behavior") return "skipped"; const w = getWizard(); if (!w) return null; return w.querySelector('textarea[aria-label^="Tell us more"]') || w.querySelector("textarea#report-wizard-description-form") || w.querySelector("textarea"); }, action: async () => { await fillDescription(state.currentLine || ""); await clickNext(); } },
-    { name: "wizard-confirm", screen: "wizard ┬À step 5 (verify + email)", detect: () => { const w = getWizard(); return w && w.querySelector('input[data-a-target="tw-checkbox"]'); }, action: async () => { if (detectCaptcha()) throw new Error("captcha before submit"); await checkVerify(); await fillEmail(); await submitReport(); } },
+    { name: "wizard-description", screen: "wizard \u00B7 step 4 (description)", detect: () => { if (state.settings.reason === "Off Twitch Behavior") return "skipped"; const w = getWizard(); if (!w) return null; return w.querySelector('textarea[aria-label^="Tell us more"]') || w.querySelector("textarea#report-wizard-description-form") || w.querySelector("textarea"); }, action: async () => { await fillDescription(state.currentLine || ""); await clickNext(); } },
+    { name: "wizard-confirm", screen: "wizard \u00B7 step 5 (verify + email)", detect: () => { const w = getWizard(); return w && w.querySelector('input[data-a-target="tw-checkbox"]'); }, action: async () => { if (detectCaptcha()) throw new Error("captcha before submit"); await checkVerify(); await fillEmail(); await submitReport(); } },
     { name: "wizard-done", screen: "confirmation screen", detect: () => qs(SEL.closeConfirm), action: async () => { await closeConfirmation(); } }
   ];
 
@@ -568,7 +571,7 @@
     const ctx = { delayMs: rand(state.settings.delayMin, state.settings.delayMax), timeoutMs: state.settings.timeoutMs, maxRetries: state.settings.maxRetries };
     while (state.running) {
       if (state.settings.cycleLimit > 0 && state.progress.cycleCount >= state.settings.cycleLimit) {
-        setStatus("cycle limit reached ÔÇö press 'reset cycles' or raise limit", "err");
+        setStatus("cycle limit reached \u2014 press 'reset cycles' or raise limit", "err");
         try { chrome.runtime.sendMessage({ type: "RESET_LANGUAGE_EN" }, () => {}); } catch {}
         return;
       }
@@ -582,7 +585,7 @@
         try { await runStepWithRetries(step, ctx); }
         catch (e) {
           if (e instanceof ChallengeError) {
-            if (++state.challengeStrikes >= 2) { setStatus("challenge detected twice ÔÇö stopping", "err"); await scheduleResumeAndReload(); return; }
+            if (++state.challengeStrikes >= 2) { setStatus("challenge detected twice \u2014 stopping", "err"); await scheduleResumeAndReload(); return; }
             await humanPause(3000); await rotateUA(); continue;
           }
           if (e instanceof StepTimeoutError && state.settings.reloadOnFail) { await scheduleResumeAndReload(); return; }
@@ -598,13 +601,13 @@
   async function startRun(autoResumed = false) {
     if (state.running) return;
     const cl = Number(state.settings.cycleLimit);
-    if (!Number.isInteger(cl) || cl < 0 || cl > 999) { setStatus("error: cycles 0ÔÇô999", "err"); return; }
-    if (state.settings.timeoutMs < 500) { setStatus("error: timeout ÔëÑ 500 ms", "err"); return; }
-    if (state.settings.maxRetries < 1) { setStatus("error: retries ÔëÑ 1", "err"); return; }
+    if (!Number.isInteger(cl) || cl < 0 || cl > 999) { setStatus("error: cycles 0-999", "err"); return; }
+    if (state.settings.timeoutMs < 500) { setStatus("error: timeout \u2265 500 ms", "err"); return; }
+    if (state.settings.maxRetries < 1) { setStatus("error: retries \u2265 1", "err"); return; }
     if (!parseDescriptionLines(state.settings.descriptionText || "").length) { setStatus("load a .reports file before starting", "err"); return; }
     if (!autoResumed) { state.progress.cycleCount = 0; state.progress.usedLines = []; persistSoon(); updateProgressUI(); }
     state.running = true; updateUI();
-    setStatus(autoResumed ? "resumed after reloadÔÇª" : "runningÔÇª");
+    setStatus(autoResumed ? "resumed after reload..." : "running...");
     try { await runAll(); if (state.running) setStatus("done.", "ok"); }
     catch (e) { setStatus("error: " + e.message, "err"); }
     finally { state.running = false; updateUI(); persistSoon(); }
@@ -617,13 +620,13 @@
     panel.id = PANEL_ID;
     panel.innerHTML = `
       <div id="tsr-header">
-        <span class="tsr-title">­ƒ¬▒ TS Reporter</span>
-        <button class="tsr-toggle" id="tsr-collapse" title="collapse">Ôû¥</button>
+        <span class="tsr-title">\u{1F9F1} TS Reporter</span>
+        <button class="tsr-toggle" id="tsr-collapse" title="collapse">\u25BC</button>
       </div>
       <div class="tsr-body">
         <div class="tsr-row"><label for="tsr-content">content type</label><select id="tsr-content"></select></div>
         <div class="tsr-row" id="tsr-reason-row"><label for="tsr-reason">reason (parent)</label><select id="tsr-reason"></select></div>
-        <div class="tsr-row" id="tsr-subreason-row"><label for="tsr-subreason">detailed reason</label><select id="tsr-subreason"><option value="">ÔÇö none ÔÇö</option></select></div>
+        <div class="tsr-row" id="tsr-subreason-row"><label for="tsr-subreason">detailed reason</label><select id="tsr-subreason"><option value="">\u2014 none \u2014</option></select></div>
         <div class="tsr-grid2">
           <div class="tsr-row"><label for="tsr-delay-min">delay min (ms)</label><input type="number" id="tsr-delay-min" min="0" step="50" /></div>
           <div class="tsr-row"><label for="tsr-delay-max">delay max (ms)</label><input type="number" id="tsr-delay-max" min="0" step="50" /></div>
@@ -632,12 +635,19 @@
           <div class="tsr-row"><label for="tsr-timeout">timeout (ms)</label><input type="number" id="tsr-timeout" min="500" step="100" /></div>
           <div class="tsr-row"><label for="tsr-retries">retries</label><input type="number" id="tsr-retries" min="1" max="20" step="1" /></div>
         </div>
-        <div class="tsr-row"><label for="tsr-cycles">cycles (1ÔÇô999, 0 = Ôê×)</label><input type="number" id="tsr-cycles" min="0" max="999" step="1" /></div>
+        <div class="tsr-row"><label for="tsr-cycles">cycles (1-999, 0 = \u221E)</label><input type="number" id="tsr-cycles" min="0" max="999" step="1" /></div>
         <div class="tsr-row"><label for="tsr-reason-file">load .reports file</label><input type="file" id="tsr-reason-file" accept=".reports" /><span id="tsr-reason-file-info" class="tsr-muted">no .reports file loaded</span></div>
         <div class="tsr-buttons"><button class="tsr-btn tsr-btn-ghost" id="tsr-clear-file">clear file</button></div>
+        <details class="tsr-antifp-details">
+          <summary class="tsr-muted">anti-fingerprint</summary>
+          <div class="tsr-antifp-grid">
+            <label><input type="checkbox" id="af-timezone" /> timezone</label>
+            <label><input type="checkbox" id="af-webrtc" /> webrtc</label>
+          </div>
+        </details>
         <div class="tsr-buttons"><button class="tsr-btn tsr-btn-primary" id="tsr-run">run</button><button class="tsr-btn tsr-btn-secondary" id="tsr-stop" disabled>stop</button><button class="tsr-btn tsr-btn-ghost" id="tsr-reset-cycles">reset cycles</button></div>
         <div class="tsr-buttons"><button class="tsr-btn tsr-btn-ghost" id="tsr-dashboard">open dashboard</button></div>
-        <div class="tsr-progress" id="tsr-progress">cycle 0/10 ÔÇö idle</div>
+        <div class="tsr-progress" id="tsr-progress">cycle 0/10 \u2014 idle</div>
         <div class="tsr-status" id="tsr-status">idle</div>
       </div>
       <div class="tsr-resize-handle"></div>
@@ -660,7 +670,7 @@
       subRow.style.display = hide ? "none" : "";
     }
     function refreshSubs() {
-      subSel.innerHTML = ""; const none = document.createElement("option"); none.value = ""; none.textContent = "ÔÇö none ÔÇö"; subSel.appendChild(none);
+      subSel.innerHTML = ""; const none = document.createElement("option"); none.value = ""; none.textContent = "\u2014 none \u2014"; subSel.appendChild(none);
       const r = REASONS[reasonSel.value]; if (!r) { updateReasonFieldsVisibility(); return; }
       for (const s of r.subs) { const o = document.createElement("option"); o.value = s; o.textContent = s; subSel.appendChild(o); }
       subSel.disabled = reasonSel.value === "Off Twitch Behavior" || r.subs.length === 0; updateReasonFieldsVisibility();
@@ -674,7 +684,7 @@
 
     function refreshFileInfo() {
       const v = parseDescriptionLines(state.settings.descriptionText || "");
-      reasonFileInfo.textContent = state.settings._reasonFileName ? `${state.settings._reasonFileName} ÔÇö ${v.length} variant(s)` : (v.length ? `${v.length} variant(s) loaded` : "no .reports file loaded");
+      reasonFileInfo.textContent = state.settings._reasonFileName ? `${state.settings._reasonFileName} \u2014 ${v.length} variant(s)` : (v.length ? `${v.length} variant(s) loaded` : "no .reports file loaded");
     }
     refreshFileInfo();
 
@@ -689,7 +699,14 @@
     bindSetting(delayMaxEl, "delayMax", v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : null; });
     bindSetting(timeoutEl, "timeoutMs", v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 500 ? n : null; });
     bindSetting(retriesEl, "maxRetries", v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 1 && n <= 20 ? n : null; });
-    bindSetting(cyclesEl, "cycleLimit", v => { const n = parseInt(v, 10); if (!Number.isFinite(n) || n < 0 || n > 999) { setStatus("error: cycles 0ÔÇô999", "err"); return null; } return n; });
+    bindSetting(cyclesEl, "cycleLimit", v => { const n = parseInt(v, 10); if (!Number.isFinite(n) || n < 0 || n > 999) { setStatus("error: cycles 0-999", "err"); return null; } return n; });
+
+    const afMap = { "af-timezone": "timezone", "af-webrtc": "webrtc" };
+    for (const [id, key] of Object.entries(afMap)) {
+      const cb = $(id); if (!cb) continue;
+      cb.checked = state.antifp[key] !== false;
+      cb.addEventListener("change", () => { state.antifp[key] = cb.checked; persistSoon(); });
+    }
 
     reasonFile.addEventListener("change", () => {
       const f = reasonFile.files && reasonFile.files[0]; if (!f) return;
@@ -698,7 +715,7 @@
       r.readAsText(f);
     });
     clearFileBtn.addEventListener("click", () => { state.settings.descriptionText = ""; state.settings._reasonFileName = null; reasonFile.value = ""; persistSoon(); refreshFileInfo(); updateProgressUI(); });
-    collapseBtn.addEventListener("click", () => { panel.classList.toggle("tsr-collapsed"); collapseBtn.textContent = panel.classList.contains("tsr-collapsed") ? "Ôû©" : "Ôû¥"; });
+    collapseBtn.addEventListener("click", () => { panel.classList.toggle("tsr-collapsed"); collapseBtn.textContent = panel.classList.contains("tsr-collapsed") ? "\u25B6" : "\u25BC"; });
     runBtn.addEventListener("click", () => startRun(false));
     stopBtn.addEventListener("click", () => stopRun("user"));
     resetCycBtn.addEventListener("click", async () => { state.progress.cycleCount = 0; state.progress.usedLines = []; await persistNow(); updateProgressUI(); setStatus("cycle counter reset", "ok"); });
@@ -727,12 +744,12 @@
   function updateProgressUI() {
     const el = document.getElementById("tsr-progress"); if (!el) return;
     const limit = state.settings.cycleLimit, cur = state.progress.cycleCount;
-    const step = state.currentStep ? ` ┬À step: ${state.currentStep}` : "";
+    const step = state.currentStep ? ` \u00B7 step: ${state.currentStep}` : "";
     const total = parseDescriptionLines(state.settings.descriptionText).length;
     const used = state.progress.usedLines.length;
-    const lines = total > 0 ? ` ┬À variants: ${used}/${total}` : "";
-    const target = state.targetChannel ? ` ┬À /${state.targetChannel}` : "";
-    el.textContent = `cycle ${cur}/${limit === 0 ? "Ôê×" : limit}${target}${step}${lines}`;
+    const lines = total > 0 ? ` \u00B7 variants: ${used}/${total}` : "";
+    const target = state.targetChannel ? ` \u00B7 /${state.targetChannel}` : "";
+    el.textContent = `cycle ${cur}/${limit === 0 ? "\u221E" : limit}${target}${step}${lines}`;
   }
   function updateUI() {
     const panel = document.getElementById(PANEL_ID); if (!panel || !panel._refs) return;

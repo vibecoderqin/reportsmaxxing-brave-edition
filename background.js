@@ -47,14 +47,6 @@ const REALISTIC_PROFILES = [
   { browser: "brave", platform: "macOS", version: "131.1.71.118", ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" }
 ];
 
-const LANG_POOL = [
-  { code: "en-US", tag: "en-US,en;q=0.9", list: ["en-US", "en"], tz: "America/New_York" },
-  { code: "en-GB", tag: "en-GB,en;q=0.9", list: ["en-GB", "en"], tz: "Europe/London" },
-  { code: "de-DE", tag: "de-DE,de;q=0.9,en;q=0.8", list: ["de-DE", "de", "en"], tz: "Europe/Berlin" },
-  { code: "fr-FR", tag: "fr-FR,fr;q=0.9,en;q=0.8", list: ["fr-FR", "fr", "en"], tz: "Europe/Paris" },
-  { code: "es-ES", tag: "es-ES,es;q=0.9,en;q=0.8", list: ["es-ES", "es", "en"], tz: "Europe/Madrid" }
-];
-
 const DEFAULT_WEBGL_PARAMS = {
   MAX_TEXTURE_SIZE: 16384,
   MAX_RENDERBUFFER_SIZE: 16384,
@@ -90,7 +82,6 @@ function enrichProfile(p) {
   const major = String(p.version).split(".")[0];
   const platformName = p.platform === "Windows" ? "Win32" : p.platform === "macOS" ? "MacIntel" : "Linux x86_64";
   const vendor = p.browser === "chrome" ? "Google Inc." : p.browser === "edge" ? "Microsoft Corporation" : p.browser === "brave" ? "Google Inc." : p.browser === "safari" ? "Apple Computer, Inc." : "";
-  const lang = LANG_POOL[(Math.random() * LANG_POOL.length) | 0];
   const hardwareConcurrency = p.platform === "Windows" ? 8 : p.platform === "macOS" ? 10 : 4;
   const deviceMemory = p.platform === "Windows" ? 8 : p.platform === "macOS" ? 16 : 4;
   const platformVersion = p.platform === "Windows" ? "10.0.0" : p.platform === "macOS" ? "15.8.0" : "6.5.0";
@@ -103,7 +94,7 @@ function enrichProfile(p) {
   const out = {
     browser: p.browser, platform: p.platform, mobile: false, version: p.version, major,
     ua: reduced, appVersion: reduced.replace(/^Mozilla\//, ""), platformName, vendor,
-    languages: lang.list.slice(), acceptLanguage: lang.tag, timezone: lang.tz,
+    languages: ["en-US", "en"], acceptLanguage: "en-US,en;q=0.9", timezone: "America/New_York",
     hardwareConcurrency, deviceMemory, platformVersion, screen: screenInfo,
     salt: randomSalt(), webglParams: { ...DEFAULT_WEBGL_PARAMS }
   };
@@ -249,7 +240,7 @@ function buildFullVersionList(browser, fullVersion, grease) {
 function buildRequestHeaders(profile) {
   const headers = [
     { header: "user-agent", operation: "set", value: profile.ua },
-    { header: "accept-language", operation: "set", value: profile.acceptLanguage }
+    { header: "accept-language", operation: "set", value: "en-US,en;q=0.9" }
   ];
   if (profile.browser === "chrome" || profile.browser === "edge" || profile.browser === "brave") {
     const v = profile.version, m = profile.major, g = 24;
@@ -473,6 +464,26 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
     }
   } catch {}
 });
+
+chrome.webNavigation.onCommitted.addListener(async (details) => {
+  if (details.frameId === 0 || !isIncognitoContext()) return;
+  const isTwitch = /^https?:\/\/([^/]+\.)?twitch\.tv\//.test(details.url);
+  const isBlank = details.url.startsWith("about:blank") || details.url.startsWith("about:srcdoc");
+  if (!isTwitch && !isBlank) return;
+  try {
+    const sess = await chrome.storage.session.get(PROFILE_KEY);
+    const profile = sess[PROFILE_KEY];
+    if (!profile) return;
+    const antifp = await getAntifpSettings();
+    const seed = await getOrCreateSessionSeed();
+    await chrome.scripting.executeScript({
+      target: { tabId: details.tabId, frameIds: [details.frameId] },
+      world: "MAIN",
+      args: [{ profile, antifp, sessionSeed: seed }],
+      func: (p) => { try { window.postMessage({ t: "__tsr_profile", p }, location.origin); } catch {} }
+    });
+  } catch {}
+}, { url: [{ hostSuffix: "twitch.tv" }, { urlPrefix: "about:blank" }, { urlPrefix: "about:srcdoc" }] });
 
 async function openDashboard(sender) {
   let url;

@@ -1,15 +1,18 @@
 {
   "manifest_version": 3,
   "name": "TS Reporter",
-  "version": "2.7.1",
-  "description": "Incognito-only Twitch reporting helper.",
+  "version": "2.7.0",
+  "description": "Incognito-only reporting helper with configurable anti-fingerprint.",
   "incognito": "split",
   "minimum_chrome_version": "120",
   "permissions": [
     "storage",
     "notifications",
+    "declarativeNetRequest",
     "tabs",
-    "clipboardWrite"
+    "clipboardWrite",
+    "webNavigation",
+    "scripting"
   ],
   "host_permissions": [
     "https://twitch.tv/*",
@@ -25,18 +28,33 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://twitch.tv/*",
-        "https://*.twitch.tv/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "css": [
-        "panel.css"
-      ],
+      "matches": ["https://twitch.tv/*", "https://*.twitch.tv/*"],
+      "js": ["content/isolated.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true
+    },
+    {
+      "matches": ["https://twitch.tv/*", "https://*.twitch.tv/*"],
+      "js": ["content/injected.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://twitch.tv/*", "https://*.twitch.tv/*"],
+      "js": ["content.js"],
+      "css": ["panel.css"],
       "run_at": "document_idle",
       "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/injected.js"],
+      "matches": ["https://twitch.tv/*", "https://*.twitch.tv/*"],
+      "use_dynamic_url": true
     }
   ],
   "options_ui": {
