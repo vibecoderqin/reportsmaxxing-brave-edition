@@ -10,7 +10,6 @@
   const K_RESUME = "tsr_resume_v1";
   const K_TARGET = "tsr_target_channel_v1";
   const K_EMAILS = "tsr_emails_v1";
-  const K_ANTIFP = "tsr_antifp_v1";
   const EMAIL_LIMIT = 2000;
   const USED_EMAILS_LIMIT = 5000;
   const RESUME_SETTLE_MS = 3000;
@@ -21,7 +20,6 @@
     descriptionText: "", delayMin: 800, delayMax: 1800, timeoutMs: 8000,
     maxRetries: 3, cycleLimit: 10, reloadOnFail: true
   };
-  const DEFAULT_ANTIFP = { timezone: true, webrtc: true };
   const DEFAULT_PROGRESS = { usedLines: [], cycleCount: 0, lastUA: null, lastBrowser: null, lastMajor: null, usedEmails: [] };
 
   const state = {
@@ -160,12 +158,11 @@
 
   async function loadAll() {
     try {
-      const data = await chrome.storage.local.get([K_SETTINGS, K_PROGRESS, K_POS, K_TARGET, K_EMAILS, K_ANTIFP]);
+      const data = await chrome.storage.local.get([K_SETTINGS, K_PROGRESS, K_POS, K_TARGET, K_EMAILS ]);
       if (data[K_SETTINGS]) state.settings = { ...DEFAULT_SETTINGS, ...data[K_SETTINGS] };
       delete state.settings.debug;
       if (data[K_PROGRESS]) state.progress = { ...DEFAULT_PROGRESS, ...data[K_PROGRESS] };
       if (data[K_TARGET]) state.targetChannel = data[K_TARGET];
-      if (data[K_ANTIFP]) state.antifp = { ...DEFAULT_ANTIFP, ...data[K_ANTIFP] };
       usedEmailsSet = new Set(Array.isArray(state.progress.usedEmails) ? state.progress.usedEmails : []);
       const log = Array.isArray(data[K_EMAILS]) ? data[K_EMAILS] : [];
       for (const rec of log) if (rec && typeof rec.email === "string") usedEmailsSet.add(rec.email);
