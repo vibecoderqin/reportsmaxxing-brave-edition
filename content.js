@@ -25,7 +25,7 @@
   const DEFAULT_PROGRESS = { usedLines: [], cycleCount: 0, lastUA: null, lastBrowser: null, lastMajor: null, usedEmails: [] };
 
   const state = {
-    running: false, settings: { ...DEFAULT_SETTINGS }, antifp: { ...DEFAULT_ANTIFP },
+    running: false, settings: { ...DEFAULT_SETTINGS },
     progress: { ...DEFAULT_PROGRESS }, currentStep: null, currentLine: null,
     usedSearchReason: false, targetChannel: null, challengeStrikes: 0
   };
@@ -178,12 +178,12 @@
   function persistSoon() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress, [K_ANTIFP]: state.antifp });
+      chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress });
     }, 200);
   }
   async function persistNow() {
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-    await chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress, [K_ANTIFP]: state.antifp });
+    await chrome.storage.local.set({ [K_SETTINGS]: state.settings, [K_PROGRESS]: state.progress });
   }
 
   const SEL = {
@@ -638,13 +638,6 @@
         <div class="tsr-row"><label for="tsr-cycles">cycles (1ÔÇô999, 0 = Ôê×)</label><input type="number" id="tsr-cycles" min="0" max="999" step="1" /></div>
         <div class="tsr-row"><label for="tsr-reason-file">load .reports file</label><input type="file" id="tsr-reason-file" accept=".reports" /><span id="tsr-reason-file-info" class="tsr-muted">no .reports file loaded</span></div>
         <div class="tsr-buttons"><button class="tsr-btn tsr-btn-ghost" id="tsr-clear-file">clear file</button></div>
-        <details class="tsr-antifp-details">
-          <summary class="tsr-muted">anti-fingerprint</summary>
-          <div class="tsr-antifp-grid">
-            <label><input type="checkbox" id="af-timezone" /> timezone</label>
-            <label><input type="checkbox" id="af-webrtc" /> webrtc</label>
-          </div>
-        </details>
         <div class="tsr-buttons"><button class="tsr-btn tsr-btn-primary" id="tsr-run">run</button><button class="tsr-btn tsr-btn-secondary" id="tsr-stop" disabled>stop</button><button class="tsr-btn tsr-btn-ghost" id="tsr-reset-cycles">reset cycles</button></div>
         <div class="tsr-buttons"><button class="tsr-btn tsr-btn-ghost" id="tsr-dashboard">open dashboard</button></div>
         <div class="tsr-progress" id="tsr-progress">cycle 0/10 ÔÇö idle</div>
@@ -700,13 +693,6 @@
     bindSetting(timeoutEl, "timeoutMs", v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 500 ? n : null; });
     bindSetting(retriesEl, "maxRetries", v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 1 && n <= 20 ? n : null; });
     bindSetting(cyclesEl, "cycleLimit", v => { const n = parseInt(v, 10); if (!Number.isFinite(n) || n < 0 || n > 999) { setStatus("error: cycles 0ÔÇô999", "err"); return null; } return n; });
-
-    const afMap = { "af-timezone": "timezone", "af-webrtc": "webrtc" };
-    for (const [id, key] of Object.entries(afMap)) {
-      const cb = $(id); if (!cb) continue;
-      cb.checked = state.antifp[key] !== false;
-      cb.addEventListener("change", () => { state.antifp[key] = cb.checked; persistSoon(); });
-    }
 
     reasonFile.addEventListener("change", () => {
       const f = reasonFile.files && reasonFile.files[0]; if (!f) return;
