@@ -474,26 +474,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
   } catch {}
 });
 
-chrome.webNavigation.onCommitted.addListener(async (details) => {
-  if (details.frameId === 0 || !isIncognitoContext()) return;
-  const isTwitch = /^https?:\/\/([^/]+\.)?twitch\.tv\//.test(details.url);
-  const isBlank = details.url.startsWith("about:blank") || details.url.startsWith("about:srcdoc");
-  if (!isTwitch && !isBlank) return;
-  try {
-    const sess = await chrome.storage.session.get(PROFILE_KEY);
-    const profile = sess[PROFILE_KEY];
-    if (!profile) return;
-    const antifp = await getAntifpSettings();
-    const seed = await getOrCreateSessionSeed();
-    await chrome.scripting.executeScript({
-      target: { tabId: details.tabId, frameIds: [details.frameId] },
-      world: "MAIN",
-      args: [{ profile, antifp, sessionSeed: seed }],
-      func: (p) => { try { window.postMessage({ t: "__tsr_profile", p }, location.origin); } catch {} }
-    });
-  } catch {}
-}, { url: [{ hostSuffix: "twitch.tv" }, { urlPrefix: "about:blank" }, { urlPrefix: "about:srcdoc" }] });
-
 async function openDashboard(sender) {
   let url;
   try { url = chrome.runtime.getURL("options.html"); } catch (e) { return { ok: false, error: "getURL failed: " + (e?.message || String(e)) }; }
